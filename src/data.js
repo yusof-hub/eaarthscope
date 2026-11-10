@@ -93,8 +93,17 @@ export async function loadDataset() {
   const required = [
     "date",
     "rainfall_mm",
+    "baseline_mm",
+    "anomaly_mm",
+    "z_score_rainfall",
     "lst_celsius",
-    "ndvi_mean"
+    "baseline_celsius",
+    "anomaly_celsius",
+    "z_score_lst",
+    "ndvi_mean",
+    "baseline_ndvi",
+    "ndvi_anomaly",
+    "z_score_ndvi"
   ];
 
   const missing = required.filter(

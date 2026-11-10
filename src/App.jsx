@@ -5,6 +5,7 @@ import {
   Search, Sun, ThermometerSun, TrendingUp, Waves, X, ArrowUpRight, Info,
   RefreshCw, SlidersHorizontal, MapPin, Sparkles, CircleHelp, CheckCircle2
 } from "lucide-react";
+import RegionalMap from "./RegionalMap.jsx";
 import {
   loadDataset,
   loadGovernorateMonthlyData,
@@ -26,21 +27,28 @@ const NAV = [
   { id:"anomalies", label:"Anomaly Detective", icon:AlertTriangle },
   { id:"fingerprint", label:"Climate Fingerprint", icon:Layers3 },
   { id:"timeline", label:"Climate Timeline", icon:CalendarDays },
-  { id:"simulator", label:"Future Simulator", icon:TrendingUp }
+  { id:"simulator", label:"Future Simulator", icon:TrendingUp },
+  { id:"about", label:"About EarthScope", icon:CircleHelp }
 ];
 
 function IconButton({ children, onClick, title, className="" }) {
   return <button className={`icon-btn ${className}`} onClick={onClick} title={title} aria-label={title}>{children}</button>;
 }
-function Metric({ icon:Icon, label, value, unit, detail, accent }) {
+function Explain({ label="Explain this data", children }) {
+  return <details className="explain">
+    <summary aria-label={label} title={label}><CircleHelp size={15}/></summary>
+    <div className="explain-popover"><strong>{label}</strong><p>{children}</p></div>
+  </details>;
+}
+function Metric({ icon:Icon, label, value, unit, detail, accent, explanation=detail }) {
   return <div className="metric glass">
-    <div className="metric-top"><span className="metric-icon" style={{"--accent":accent}}><Icon size={18}/></span><span className="metric-label">{label}</span><span className="metric-dot"/></div>
+    <div className="metric-top"><span className="metric-icon" style={{"--accent":accent}}><Icon size={18}/></span><span className="metric-label">{label}</span><Explain label={`Explain ${label.toLowerCase()}`}>{explanation}</Explain><span className="metric-dot"/></div>
     <div className="metric-value">{value}<small>{unit}</small></div>
     <div className="metric-detail">{detail}</div>
   </div>;
 }
-function SectionHeading({ eyebrow, title, subtitle, right }) {
-  return <div className="section-heading"><div><div className="eyebrow">{eyebrow}</div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>{right}</div>;
+function SectionHeading({ eyebrow, title, subtitle, right, explanation }) {
+  return <div className="section-heading"><div><div className="eyebrow">{eyebrow}</div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><div className="heading-actions">{explanation&&<Explain label={`About ${title}`}>{explanation}</Explain>}{right}</div></div>;
 }
 function Select({ value, onChange, children, label }) {
   return <label className="select-wrap"><span>{label}</span><select value={value} onChange={e=>onChange(e.target.value)}>{children}</select><ChevronDown size={14}/></label>;
@@ -59,8 +67,11 @@ function DataChart({ data, lines, height=280, yLabel }) {
       <LineChart data={data} margin={{top:12,right:12,left:0,bottom:4}}>
         <CartesianGrid stroke="var(--grid)" vertical={false}/>
         <XAxis dataKey="label" tick={{fill:"var(--muted)",fontSize:11}} tickLine={false} axisLine={false} minTickGap={28}/>
-        <YAxis tick={{fill:"var(--muted)",fontSize:11}} tickLine={false} axisLine={false} width={48}/>
+        <YAxis domain={[-4,4]} allowDataOverflow tick={{fill:"var(--muted)",fontSize:11}} tickLine={false} axisLine={false} width={48} label={yLabel?{value:yLabel,angle:-90,position:"insideLeft",fill:"var(--muted)",fontSize:10}:undefined}/>
         <Tooltip content={<ChartTooltip/>}/>
+        <ReferenceLine y={0} stroke="var(--muted)" strokeOpacity={0.65}/>
+        <ReferenceLine y={2} stroke="var(--muted-strong)" strokeDasharray="4 4"/>
+        <ReferenceLine y={-2} stroke="var(--muted-strong)" strokeDasharray="4 4"/>
         {lines.map(line=><Line key={line.key} type="monotone" dataKey={line.key} name={line.name} stroke={line.color} strokeWidth={2} dot={false} connectNulls={false}/>)}
       </LineChart>
     </ResponsiveContainer>
@@ -99,36 +110,33 @@ function Topbar({page,theme,setTheme,onMenu,dataStatus}) {
 }
 function Overview({rows,setPage}) {
   const latest=rows.at(-1), candidates=getAnomalyCandidates(rows);
-  const chartData=rows.map(r=>({label:monthLabel(r.date),rain:r.rainfall_mm,lst:r.lst_celsius,ndvi:r.ndvi_mean}));
+  const chartData=rows.map(r=>({label:monthLabel(r.date),rain:r[INDICATORS.rainfall.z],lst:r[INDICATORS.lst.z],ndvi:r[INDICATORS.ndvi.z]}));
   const stats=calcStats(rows,"rainfall_mm");
   const indicatorRows=Object.entries(INDICATORS).map(([id,m])=>({id,...m,row:latestValid(rows,m.value)}));
   return <div className="page-stack">
     <div className="welcome-row"><div><div className="eyebrow">EARTH SYSTEM TREND DETECTIVE / EGYPT</div><h1>See the bigger <em>picture.</em></h1><p>Explore environmental signals, investigate anomalies, and understand how Earth's systems change over time.</p></div><div className="coverage-chip"><span className="coverage-icon"><CalendarDays size={17}/></span><div><small>OBSERVATION PERIOD</small><b>{rows[0]?.date} — {latest?.date}</b></div></div></div>
     <div className="metric-grid">
-      <Metric icon={Database} label="MONTHLY RECORDS" value={rows.length.toLocaleString()} unit="months" detail="Validated rows loaded from CSV" accent="#75b9ee"/>
-      <Metric icon={CalendarDays} label="TIME COVERAGE" value={rows.length?`${rows[0].date.slice(0,4)}–${latest.date.slice(0,4)}`:"—"} unit="" detail="Historical monthly observations" accent="#a99ae9"/>
-      <Metric icon={Layers3} label="INDICATORS" value="03" unit="datasets" detail="Rainfall · LST · NDVI" accent="#7bc99b"/>
-      <Metric icon={AlertTriangle} label="MULTI-SIGNAL CANDIDATES" value={candidates.length} unit="months" detail="At least two |Z-score| ≥ 2" accent="#efad78"/>
+      <Metric icon={Database} label="MONTHLY RECORDS" value={rows.length.toLocaleString()} unit="months" detail="Validated rows loaded from CSV" explanation="Count of monthly records in the national dataset. A record is not necessarily complete for every indicator." accent="#75b9ee"/>
+      <Metric icon={CalendarDays} label="TIME COVERAGE" value={rows.length?`${rows[0].date.slice(0,4)}–${latest.date.slice(0,4)}`:"—"} unit="" detail="Historical monthly observations" explanation="The first and last years represented in the loaded national observations." accent="#a99ae9"/>
+      <Metric icon={Layers3} label="INDICATORS" value="03" unit="datasets" detail="Rainfall · LST · NDVI" explanation="The dashboard presents precipitation, land surface temperature, and vegetation greenness (NDVI)." accent="#7bc99b"/>
+      <Metric icon={AlertTriangle} label="MULTI-SIGNAL CANDIDATES" value={candidates.length} unit="months" detail="At least two |Z-score| ≥ 2" explanation="Months where at least two indicators have absolute Z-scores of 2 or greater. This is a screening flag, not proof of a cause." accent="#efad78"/>
     </div>
     <div className="content-grid overview-grid">
-      <section className="panel glass chart-panel"><div className="panel-head"><div><div className="eyebrow">HISTORICAL OVERVIEW</div><h3>Environmental signals</h3><p>Monthly observations across the full dataset</p></div><span className="live-tag"><span/> CSV DATA</span></div>
-        <div className="legend-row"><span><i style={{background:INDICATORS.rainfall.color}}/>Rainfall (mm)</span><span><i style={{background:INDICATORS.lst.color}}/>LST (°C)</span><span><i style={{background:INDICATORS.ndvi.color}}/>NDVI</span></div>
-        <DataChart data={chartData} lines={[{key:"rain",name:"Rainfall (mm)",color:INDICATORS.rainfall.color},{key:"lst",name:"LST (°C)",color:INDICATORS.lst.color},{key:"ndvi",name:"NDVI",color:INDICATORS.ndvi.color}]}/>
-        <div className="chart-note"><Info size={14}/> Indicators use different units and scales. Use the dedicated pages for meaningful individual comparisons.</div>
+      <section className="panel glass chart-panel"><div className="panel-head"><div><div className="eyebrow">HISTORICAL OVERVIEW</div><h3>Standardized environmental anomalies</h3><p>Compare unusually high and low months across indicators</p></div><div className="heading-actions"><Explain label="Explain the environmental signals chart">Each line shows a monthly Z-score: how far an observation sits from its month-specific baseline in standard deviations. This makes relative departures comparable across indicators. Dashed guides mark ±2; values outside the visible ±4 range are clipped, so inspect the Anomaly Detective for exact extremes. Z-scores can be inflated where historical variability is very small.</Explain><span className="live-tag"><span/> CSV DATA</span></div></div>
+        <div className="legend-row"><span><i style={{background:INDICATORS.rainfall.color}}/>Rainfall (Z-score)</span><span><i style={{background:INDICATORS.lst.color}}/>LST (Z-score)</span><span><i style={{background:INDICATORS.ndvi.color}}/>NDVI (Z-score)</span></div>
+        <DataChart data={chartData} yLabel="Standard deviations from baseline" lines={[{key:"rain",name:"Rainfall Z-score",color:INDICATORS.rainfall.color},{key:"lst",name:"LST Z-score",color:INDICATORS.lst.color},{key:"ndvi",name:"NDVI Z-score",color:INDICATORS.ndvi.color}]}/>
+        <div className="chart-note"><Info size={14}/> The chart is limited to ±4 standard deviations so smaller departures remain legible. Open Anomaly Detective to inspect full values, including larger outliers.</div>
       </section>
-      <section className="panel glass indicator-panel"><div className="panel-head"><div><div className="eyebrow">LATEST AVAILABLE</div><h3>Indicator snapshot</h3><p>{latest?.date || "No date available"}</p></div><Activity size={18} className="muted-icon"/></div>
-        <div className="indicator-list">{indicatorRows.map(({id,label,unit,value,anomaly,z,row,color,description})=><div className="indicator-row" key={id}><div className="indicator-symbol" style={{"--accent":color}}>{id==="rainfall"?<Droplets size={18}/>:id==="lst"?<ThermometerSun size={18}/>:<Leaf size={18}/>}</div><div className="indicator-info"><b>{label}</b><small>{description}</small></div><div className="indicator-reading"><strong>{fmt(row?.[value],id==="ndvi"?4:2)}</strong><small>{unit}</small><span className={row?.[anomaly]>=0?"positive":"negative"}>{row?.[anomaly]==null?"No anomaly":`${row[anomaly]>=0?"+":""}${fmt(row[anomaly],3)} ${unit}`}</span></div></div>)}</div>
+      <section className="panel glass indicator-panel"><div className="panel-head"><div><div className="eyebrow">LATEST AVAILABLE</div><h3>Indicator snapshot</h3><p>Most recent valid reading for each indicator</p></div><div className="heading-actions"><Explain label="Explain the indicator snapshot">The latest available reading for each indicator, along with its difference from its month-specific baseline. The dates can differ when an indicator has missing values; check the date shown beside each reading.</Explain><Activity size={18} className="muted-icon"/></div></div>
+        <div className="indicator-list">{indicatorRows.map(({id,label,unit,value,anomaly,z,row,color,description})=><div className="indicator-row" key={id}><div className="indicator-symbol" style={{"--accent":color}}>{id==="rainfall"?<Droplets size={18}/>:id==="lst"?<ThermometerSun size={18}/>:<Leaf size={18}/>}</div><div className="indicator-info"><b>{label}</b><small>{description}</small><span className="indicator-as-of">Latest: {row?.date?monthLabel(row.date):"No valid reading"}</span></div><div className="indicator-reading"><strong>{fmt(row?.[value],id==="ndvi"?4:2)}</strong><small>{unit}</small><span className={row?.[anomaly]>=0?"positive":"negative"}>{row?.[anomaly]==null?"No anomaly":`${row[anomaly]>=0?"+":""}${fmt(row[anomaly],3)} ${unit}`}</span><Explain label={`Explain ${label}`}>{description} The anomaly is the observed value minus its corresponding baseline, expressed in {unit}.</Explain></div></div>)}</div>
       </section>
     </div>
     <div className="content-grid lower-grid">
-      <section className="panel glass"><div className="panel-head"><div><div className="eyebrow">INVESTIGATE</div><h3>Recent anomaly candidates</h3><p>Months with at least two indicators crossing the screening threshold</p></div><button className="text-link" onClick={()=>setPage("anomalies")}>Explore all <ArrowUpRight size={14}/></button></div>
+      <section className="panel glass"><div className="panel-head"><div><div className="eyebrow">INVESTIGATE</div><h3>Recent anomaly candidates</h3><p>Months with at least two indicators crossing the screening threshold</p></div><div className="heading-actions"><Explain label="Explain anomaly candidates">These months have at least two indicators with an absolute Z-score of 2 or greater. Z-scores describe distance from the reference in standard deviations; investigate further before drawing conclusions.</Explain><button className="text-link" onClick={()=>setPage("anomalies")}>Explore all <ArrowUpRight size={14}/></button></div></div>
         {candidates.slice(0,4).length?candidates.slice(0,4).map(r=><div className="finding-row" key={r.date}><div className="finding-date">{r.date}</div><div className="finding-bars">{r.flags.map(f=><span key={f.id} style={{background:f.color}} title={f.label}/>)}</div><div className="finding-summary">{r.count} indicators flagged</div><ChevronRight size={15} className="muted-icon"/></div>):<EmptyState title="No candidate months" message="No months currently meet the multi-indicator screening rule."/>}
       </section>
-      <section className="panel glass map-preview"><div className="panel-head"><div><div className="eyebrow">GEOGRAPHIC CONTEXT</div><h3>Egypt study area</h3><p>National monthly dataset</p></div><MapPin size={18} className="muted-icon"/></div>
-        <div className="egypt-visual"><div className="map-gridlines"/><svg viewBox="0 0 260 210" role="img" aria-label="Schematic outline indicating Egypt study area"><path d="M66 19 L180 19 L205 55 L194 100 L211 139 L174 181 L96 172 L73 126 L50 91 Z" fill="rgba(105,184,242,.13)" stroke="#69b8f2" strokeWidth="1.6" strokeDasharray="4 3"/><path d="M66 19 L180 19 L205 55" fill="none" stroke="#69b8f2" strokeWidth="2"/><circle cx="130" cy="98" r="4" fill="#69b8f2"/><circle cx="130" cy="98" r="12" fill="none" stroke="#69b8f2" opacity=".35"/></svg><span className="map-label">EGYPT</span><span className="map-coord">NATIONAL STUDY AREA</span></div>
-        <div className="map-disclaimer"><Info size={13}/> Schematic locator only — not a measured raster map. Spatial layers are not connected to this national CSV.</div>
-      </section>
     </div>
+    <RegionalMap/>
     <div className="source-strip"><span><Database size={15}/> DATA SOURCE</span><b>NASA GPM IMERG · MODIS MOD11A2 · MODIS MOD13Q1</b><span className="source-period">Baseline: 2001–2020</span></div>
   </div>;
 }
@@ -142,17 +150,17 @@ function AnomalyDetective({rows}) {
   }).filter(r=>r.count>0&&(indicator==="all"?r.count>=2:true)&&(year==="all"||r.date.startsWith(year))).sort((a,b)=>b.date.localeCompare(a.date)),[rows,indicator,t,year]);
   const years=[...new Set(rows.map(r=>r.date.slice(0,4)))];
   const active=results.find(r=>r.date===selected)||results[0];
-  return <div className="page-stack"><SectionHeading eyebrow="INVESTIGATION MODULE / 01" title="Anomaly Detective" subtitle="Find observations that differ from their historical reference conditions." right={<span className="module-badge"><AlertTriangle size={14}/> SCREENING ENGINE</span>}/>
-    <div className="panel glass filter-panel"><div className="filter-title"><SlidersHorizontal size={16}/> Investigation controls</div><div className="filters">
+  return <div className="page-stack"><SectionHeading eyebrow="INVESTIGATION MODULE / 01" title="Anomaly Detective" subtitle="Find observations that differ from their historical reference conditions." explanation="This page screens national monthly records by comparing observations with month-specific baselines. Z-scores help flag unusual values but do not explain why they occurred." right={<span className="module-badge"><AlertTriangle size={14}/> SCREENING ENGINE</span>}/>
+    <div className="panel glass filter-panel"><div className="heading-actions"><div className="filter-title"><SlidersHorizontal size={16}/> Investigation controls</div><Explain label="Explain investigation controls">Choose an indicator, year, and Z-score threshold. When multiple indicators are selected, a month appears only when at least two indicators meet the threshold.</Explain></div><div className="filters">
       <Select label="INDICATOR" value={indicator} onChange={v=>{setIndicator(v);setSelected(null)}}><option value="all">Multiple indicators (2+)</option><option value="rainfall">Rainfall</option><option value="lst">Land Surface Temperature</option><option value="ndvi">NDVI</option></Select>
       <Select label="YEAR" value={year} onChange={setYear}><option value="all">All years</option>{years.map(y=><option key={y}>{y}</option>)}</Select>
       <Select label="Z-SCORE THRESHOLD" value={threshold} onChange={setThreshold}><option value="1.5">±1.5</option><option value="2">±2.0 (default)</option><option value="2.5">±2.5</option><option value="3">±3.0</option></Select>
     </div></div>
     <div className="metric-grid three"><Metric icon={Search} label="MATCHING PERIODS" value={results.length} unit="months" detail="After selected filters" accent="#75b9ee"/><Metric icon={AlertTriangle} label="SCREENING RULE" value={indicator==="all"?"2+":"1+"} unit="indicators" detail={`Absolute Z-score ≥ ${t}`} accent="#efad78"/><Metric icon={CalendarDays} label="SELECTED PERIOD" value={active?.date||"—"} unit="" detail="Most recent matching month" accent="#a99ae9"/></div>
-    <div className="content-grid anomaly-layout"><section className="panel glass"><div className="panel-head"><div><div className="eyebrow">DETECTION RESULTS</div><h3>Candidate observations</h3><p>{results.length} matching months · newest first</p></div></div>
+    <div className="content-grid anomaly-layout"><section className="panel glass"><div className="panel-head"><div><div className="eyebrow">DETECTION RESULTS</div><h3>Candidate observations</h3><p>{results.length} matching months · newest first</p></div><Explain label="Explain detection results">The displayed σ value is the indicator's Z-score: how many standard deviations the observation is from its month-specific reference. Positive and negative signs indicate above- and below-baseline values.</Explain></div>
       <div className="result-list">{results.map(r=><button key={r.date} className={`result-item ${active?.date===r.date?"selected":""}`} onClick={()=>setSelected(r.date)}><div className="result-date"><b>{r.date}</b><small>{r.count} flagged</small></div><div className="result-tags">{r.flags.map(f=><span key={f.id} style={{"--tag":f.color}}>{f.label==="Land Surface Temperature"?"LST":f.id.toUpperCase()} <b>{f.z>0?"+":""}{fmt(f.z,2)}σ</b></span>)}</div><ChevronRight size={16}/></button>)}
       {results.length===0&&<EmptyState title="No matching observations" message="Try a lower threshold, another year, or a different indicator selection."/>}</div></section>
-      <section className="panel glass detail-panel"><div className="panel-head"><div><div className="eyebrow">OBSERVATION DETAILS</div><h3>{active?active.date:"Select a result"}</h3><p>Values compared with the month-specific baseline</p></div></div>
+      <section className="panel glass detail-panel"><div className="panel-head"><div><div className="eyebrow">OBSERVATION DETAILS</div><h3>{active?active.date:"Select a result"}</h3><p>Values compared with the month-specific baseline</p></div><Explain label="Explain observation details">Observed is the recorded measurement, baseline is the reference value for that calendar month, and anomaly is observed minus baseline. The Z-score expresses the anomaly relative to historical variability.</Explain></div>
         {active?<><div className="detail-flags">{active.flags.map(f=><div className="detail-flag" key={f.id}><div className="detail-flag-head"><span style={{color:f.color}}>{f.label}</span><b className={f.z>=0?"positive":"negative"}>{f.z>0?"+":""}{fmt(f.z,2)}σ</b></div><div className="detail-values"><div><small>OBSERVED</small><b>{fmt(f.value,f.id==="ndvi"?4:2)} <i>{f.unit}</i></b></div><div><small>BASELINE</small><b>{fmt(f.baseline,f.id==="ndvi"?4:2)} <i>{f.unit}</i></b></div><div><small>ANOMALY</small><b>{f.anomaly>0?"+":""}{fmt(f.anomaly,3)} <i>{f.unit}</i></b></div></div></div>)}</div><div className="interpretation"><Info size={16}/><p>This is a statistical screening candidate, not a confirmed climate event. Simultaneous anomalies do not establish causation. Interpret Z-scores alongside absolute anomalies, especially when historical variability is very small.</p></div></>:<EmptyState title="Choose an observation" message="Select a candidate month to inspect its measurements and anomalies."/>}</section></div>
   </div>;
 }
@@ -277,6 +285,11 @@ function ClimateFingerprint() {
     }
   };
 
+  const availableIndicators = Object.entries(indicatorConfig).filter(
+    ([, item]) =>
+      monthly.some((row) => row[item.monthly] != null) &&
+      fingerprints.some((row) => row[item.average] != null)
+  );
   const meta = indicatorConfig[indicator];
 
   const groupLabel = (value) => {
@@ -412,6 +425,7 @@ function ClimateFingerprint() {
         eyebrow="REGIONAL ANALYSIS / 02"
         title="Climate Fingerprint"
         subtitle="Compare environmental characteristics and discover similarities across Egypt's governorates."
+        explanation="Compare long-term regional averages, variability, unusual-month frequency, and monthly histories. Climate groups are exploratory clusters from the supplied data, not official climate classifications."
         right={
           <span className="module-badge">
             <Layers3 size={14} /> REGIONAL DATA CONNECTED
@@ -447,18 +461,18 @@ function ClimateFingerprint() {
         <Metric
           icon={Activity}
           label="INDICATORS"
-          value="03"
+          value={availableIndicators.length}
           unit="variables"
-          detail="Rainfall · LST · NDVI"
+          detail="Regional variables with valid data"
           accent="#efad78"
         />
       </div>
 
       <div className="panel glass filter-panel">
-        <div className="filter-title">
+        <div className="heading-actions"><div className="filter-title">
           <SlidersHorizontal size={16} />
           Regional comparison controls
-        </div>
+        </div><Explain label="Explain regional comparison controls">Select a governorate, optionally choose another for comparison, and select one indicator. Monthly values and profile statistics update to the selected indicator.</Explain></div>
 
         <div className="filters">
           <Select
@@ -493,9 +507,15 @@ function ClimateFingerprint() {
             value={indicator}
             onChange={setIndicator}
           >
-            <option value="rainfall">Rainfall</option>
-            <option value="lst">Land Surface Temperature</option>
-            <option value="ndvi">NDVI</option>
+            {Object.entries(indicatorConfig).map(([id, item]) => (
+              <option
+                key={id}
+                value={id}
+                disabled={!availableIndicators.some(([availableId]) => availableId === id)}
+              >
+                {item.label}{availableIndicators.some(([availableId]) => availableId === id) ? "" : " — no regional data"}
+              </option>
+            ))}
           </Select>
         </div>
       </div>
@@ -515,6 +535,7 @@ function ClimateFingerprint() {
             <div className="profile-group">
               <span>CLIMATE GROUP</span>
               <b>{groupLabel(selectedGroup)}</b>
+              <Explain label="Explain climate group">This is the cluster assigned in the processed fingerprint dataset. It describes similarity within the analysis and is not an official climate zone.</Explain>
             </div>
 
             {Object.entries(indicatorConfig).map(([id, item]) => (
@@ -531,7 +552,10 @@ function ClimateFingerprint() {
                     {item.unit}
                   </small>
                 </div>
-                <span className="status-tag">AVAILABLE</span>
+                <Explain label={`Explain ${item.label}`}>Regional mean from the climate fingerprint dataset for {item.label}. The monthly time series and regional profile use the same supplied records but summarize them differently.</Explain>
+                <span className={`status-tag ${selectedProfile?.[item.average] == null ? "unavailable" : ""}`}>
+                  {selectedProfile?.[item.average] == null ? "NO DATA" : "AVAILABLE"}
+                </span>
               </div>
             ))}
           </div>
@@ -552,6 +576,7 @@ function ClimateFingerprint() {
               <div className="profile-group">
                 <span>CLIMATE GROUP</span>
                 <b>{groupLabel(comparisonGroup)}</b>
+                <Explain label="Explain climate group">This is the cluster assigned in the processed fingerprint dataset. It describes similarity within the analysis and is not an official climate zone.</Explain>
               </div>
 
               {Object.entries(indicatorConfig).map(([id, item]) => (
@@ -568,7 +593,10 @@ function ClimateFingerprint() {
                       {item.unit}
                     </small>
                   </div>
-                  <span className="status-tag">AVAILABLE</span>
+                  <Explain label={`Explain ${item.label}`}>Regional mean from the climate fingerprint dataset for {item.label}. The monthly time series and regional profile use the same supplied records but summarize them differently.</Explain>
+                  <span className={`status-tag ${comparisonProfile[item.average] == null ? "unavailable" : ""}`}>
+                    {comparisonProfile[item.average] == null ? "NO DATA" : "AVAILABLE"}
+                  </span>
                 </div>
               ))}
             </>
@@ -590,7 +618,7 @@ function ClimateFingerprint() {
               Regional average, variability, and unusual-month frequency
             </p>
           </div>
-          <span className="unit-chip">{meta.unit}</span>
+          <div className="heading-actions"><Explain label={`Explain ${meta.label} profile`}>Average is the regional mean, variability describes the spread of monthly observations, and unusual months is the percentage marked unusual by the supplied analysis.</Explain><span className="unit-chip">{meta.unit}</span></div>
         </div>
 
         <div className="metric-grid three">
@@ -668,7 +696,7 @@ function ClimateFingerprint() {
               Monthly observations for the selected governorates
             </p>
           </div>
-          <span className="unit-chip">{meta.unit}</span>
+          <div className="heading-actions"><Explain label={`Explain ${meta.label} history`}>The lines show monthly observations for the selected governorate or governorates. Gaps indicate missing values; each value is in {meta.unit}.</Explain><span className="unit-chip">{meta.unit}</span></div>
         </div>
 
         {chartData.length ? (
@@ -749,7 +777,7 @@ function ClimateFingerprint() {
               Group membership from the processed fingerprint dataset
             </p>
           </div>
-          <Layers3 size={18} className="muted-icon" />
+          <Explain label="Explain climate groups">The counts and member lists come from the supplied clustering dataset. Groups indicate similarity in the variables used for clustering and should not be treated as official zones.</Explain>
         </div>
 
         <div className="cluster-steps">
@@ -799,11 +827,11 @@ function ClimateTimeline({rows}) {
   const chartData=filtered.map(r=>({label:monthLabel(r.date),value:r[meta.value],baseline:r[meta.baseline]}));
   const anomalyStats=calcStats(filtered,meta.anomaly);
   const years=[...new Set(rows.map(r=>r.date.slice(0,4)))];
-  return <div className="page-stack"><SectionHeading eyebrow="HISTORICAL EXPLORATION / 03" title="Climate Timeline" subtitle="Explore how environmental observations and anomalies evolved from 2001 to 2024."/>
-    <div className="panel glass filter-panel"><div className="filter-title"><SlidersHorizontal size={16}/> Timeline controls</div><div className="filters"><Select label="INDICATOR" value={indicator} onChange={setIndicator}><option value="rainfall">Rainfall</option><option value="lst">Land Surface Temperature</option><option value="ndvi">NDVI</option></Select><Select label="FROM YEAR" value={start} onChange={setStart}>{years.map(y=><option key={y}>{y}</option>)}</Select><Select label="TO YEAR" value={end} onChange={setEnd}>{years.filter(y=>Number(y)>=Number(start)).map(y=><option key={y}>{y}</option>)}</Select></div></div>
-    <div className="metric-grid three"><Metric icon={CalendarDays} label="OBSERVATIONS" value={filtered.length} unit="months" detail={`${start} to ${end}`} accent="#75b9ee"/><Metric icon={Activity} label="MEAN ANOMALY" value={fmt(anomalyStats?.mean,3)} unit={meta.unit} detail="Average absolute anomaly in selected period" accent="#a99ae9"/><Metric icon={TrendingUp} label="OBSERVED RANGE" value={anomalyStats?`${fmt(anomalyStats.min,2)} to ${fmt(anomalyStats.max,2)}`:"—"} unit={meta.unit} detail="Minimum to maximum anomaly" accent="#7bc99b"/></div>
-    <section className="panel glass"><div className="panel-head"><div><div className="eyebrow">OBSERVED VALUES</div><h3>{meta.label} over time</h3><p>Monthly satellite-derived measurements and month-specific baseline</p></div><span className="unit-chip">{meta.unit}</span></div><div className="legend-row"><span><i style={{background:meta.color}}/>Observed</span><span><i style={{background:"var(--muted)"}}/>Baseline</span></div><div className="chart-wrap" style={{height:330}}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData} margin={{top:12,right:15,left:0,bottom:4}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="label" tick={{fill:"var(--muted)",fontSize:11}} tickLine={false} axisLine={false} minTickGap={30}/><YAxis tick={{fill:"var(--muted)",fontSize:11}} tickLine={false} axisLine={false} width={55}/><Tooltip content={<ChartTooltip/>}/><Line dataKey="value" name="Observed" stroke={meta.color} strokeWidth={1.8} dot={false}/><Line dataKey="baseline" name="Baseline" stroke="var(--muted)" strokeDasharray="5 5" strokeWidth={1.5} dot={false}/></LineChart></ResponsiveContainer></div></section>
-    <section className="panel glass"><div className="panel-head"><div><div className="eyebrow">DEVIATION FROM BASELINE</div><h3>{meta.label} anomaly timeline</h3><p>Positive values are above baseline; negative values are below baseline.</p></div></div><AnomalyChart rows={filtered} meta={meta}/></section>
+  return <div className="page-stack"><SectionHeading eyebrow="HISTORICAL EXPLORATION / 03" title="Climate Timeline" subtitle="Explore how environmental observations and anomalies evolved from 2001 to 2024." explanation="Filter the national monthly dataset by indicator and inclusive year range. The baseline uses the corresponding calendar month from the supplied 2001–2020 reference period."/>
+    <div className="panel glass filter-panel"><div className="heading-actions"><div className="filter-title"><SlidersHorizontal size={16}/> Timeline controls</div><Explain label="Explain timeline controls">Choose an indicator, a starting year, and an ending year. The charts and statistics below use only records inside that inclusive range.</Explain></div><div className="filters"><Select label="INDICATOR" value={indicator} onChange={setIndicator}><option value="rainfall">Rainfall</option><option value="lst">Land Surface Temperature</option><option value="ndvi">NDVI</option></Select><Select label="FROM YEAR" value={start} onChange={setStart}>{years.map(y=><option key={y}>{y}</option>)}</Select><Select label="TO YEAR" value={end} onChange={setEnd}>{years.filter(y=>Number(y)>=Number(start)).map(y=><option key={y}>{y}</option>)}</Select></div></div>
+    <div className="metric-grid three"><Metric icon={CalendarDays} label="OBSERVATIONS" value={filtered.length} unit="months" detail={`${start} to ${end}`} explanation="Number of monthly records in the selected indicator and year range." accent="#75b9ee"/><Metric icon={Activity} label="MEAN ANOMALY" value={fmt(anomalyStats?.mean,3)} unit={meta.unit} detail="Average signed anomaly in selected period" explanation="Average of observed-minus-baseline anomalies. Positive and negative values can offset one another." accent="#a99ae9"/><Metric icon={TrendingUp} label="ANOMALY RANGE" value={anomalyStats?`${fmt(anomalyStats.min,2)} to ${fmt(anomalyStats.max,2)}`:"—"} unit={meta.unit} detail="Minimum to maximum anomaly" explanation="Smallest and largest observed-minus-baseline anomalies in the selected period." accent="#7bc99b"/></div>
+    <section className="panel glass"><div className="panel-head"><div><div className="eyebrow">OBSERVED VALUES</div><h3>{meta.label} over time</h3><p>Monthly satellite-derived measurements and month-specific baseline</p></div><div className="heading-actions"><Explain label={`Explain ${meta.label} chart`}>Observed values are compared with the dashed month-specific baseline. The y-axis and tooltip use {meta.unit}. Missing observations appear as gaps.</Explain><span className="unit-chip">{meta.unit}</span></div></div><div className="legend-row"><span><i style={{background:meta.color}}/>Observed</span><span><i style={{background:"var(--muted)"}}/>Baseline</span></div><div className="chart-wrap" style={{height:330}}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData} margin={{top:12,right:15,left:0,bottom:4}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="label" tick={{fill:"var(--muted)",fontSize:11}} tickLine={false} axisLine={false} minTickGap={30}/><YAxis tick={{fill:"var(--muted)",fontSize:11}} tickLine={false} axisLine={false} width={55}/><Tooltip content={<ChartTooltip/>}/><Line dataKey="value" name="Observed" stroke={meta.color} strokeWidth={1.8} dot={false}/><Line dataKey="baseline" name="Baseline" stroke="var(--muted)" strokeDasharray="5 5" strokeWidth={1.5} dot={false}/></LineChart></ResponsiveContainer></div></section>
+    <section className="panel glass"><div className="panel-head"><div><div className="eyebrow">DEVIATION FROM BASELINE</div><h3>{meta.label} anomaly timeline</h3><p>Positive values are above baseline; negative values are below baseline.</p></div><Explain label="Explain the anomaly timeline">Each bar is an observed value minus its month-specific baseline. Bars above zero are higher than baseline and bars below zero are lower.</Explain></div><AnomalyChart rows={filtered} meta={meta}/></section>
     <div className="chart-note"><Info size={14}/> The baseline is month-specific (2001–2020). These charts describe the supplied dataset; trend significance requires a separate statistical test.</div>
   </div>;
 }
@@ -812,18 +840,125 @@ function FutureSimulator({rows}) {
   const baseline=useMemo(()=>({rain:calcStats(rows,"rainfall_mm")?.mean||0,lst:calcStats(rows,"lst_celsius")?.mean||0,ndvi:calcStats(rows,"ndvi_mean")?.mean||0}),[rows]);
   const reset=()=>{setRainDelta(0);setTempDelta(0);setNdviDelta(0)};
   const scenarios=[{label:"Reference",rain:0,temp:0,ndvi:0},{label:"Warmer / drier",rain:-15,temp:2,ndvi:-.02},{label:"Warmer / wetter",rain:15,temp:2,ndvi:.01}];
-  return <div className="page-stack"><SectionHeading eyebrow="SCENARIO LAB / 04" title="Future Simulator" subtitle="Explore hypothetical changes to environmental variables. This is a scenario calculator, not a climate forecast." right={<span className="module-badge pending"><Sparkles size={14}/> EXPLORATORY</span>}/>
+  return <div className="page-stack"><SectionHeading eyebrow="SCENARIO LAB / 04" title="Future Simulator" subtitle="Explore hypothetical changes to environmental variables. This is a scenario calculator, not a climate forecast." explanation="This tool performs arithmetic adjustments to historical means. It does not simulate climate physics, emissions, or the causal relationship among rainfall, temperature, and vegetation." right={<span className="module-badge pending"><Sparkles size={14}/> EXPLORATORY</span>}/>
     <div className="hero-callout warning"><div className="callout-icon"><CircleHelp size={22}/></div><div><b>Explore assumptions, not predictions.</b><p>The controls apply user-selected changes to historical average values. They do not model physical climate processes, future emissions, or validated vegetation responses. Outputs must not be interpreted as official projections.</p></div></div>
-    <div className="content-grid simulator-grid"><section className="panel glass"><div className="panel-head"><div><div className="eyebrow">SCENARIO INPUTS</div><h3>Adjust environmental assumptions</h3><p>Changes are relative to the dataset's historical mean.</p></div><button className="text-link" onClick={reset}><RefreshCw size={14}/> Reset</button></div>
-      <div className="slider-control"><div className="slider-label"><span><Droplets size={17}/> Rainfall change</span><b>{rainDelta>0?"+":""}{rainDelta}%</b></div><input type="range" min="-50" max="50" step="5" value={rainDelta} onChange={e=>setRainDelta(Number(e.target.value))}/><div className="range-labels"><span>−50%</span><span>0%</span><span>+50%</span></div></div>
-      <div className="slider-control"><div className="slider-label"><span><ThermometerSun size={17}/> LST change</span><b>{tempDelta>0?"+":""}{tempDelta.toFixed(1)} °C</b></div><input type="range" min="-3" max="5" step=".5" value={tempDelta} onChange={e=>setTempDelta(Number(e.target.value))}/><div className="range-labels"><span>−3 °C</span><span>0 °C</span><span>+5 °C</span></div></div>
-      <div className="slider-control"><div className="slider-label"><span><Leaf size={17}/> NDVI adjustment</span><b>{ndviDelta>0?"+":""}{ndviDelta.toFixed(3)}</b></div><input type="range" min="-.05" max=".05" step=".005" value={ndviDelta} onChange={e=>setNdviDelta(Number(e.target.value))}/><div className="range-labels"><span>−0.05</span><span>0</span><span>+0.05</span></div></div>
-    </section><section className="panel glass"><div className="panel-head"><div><div className="eyebrow">CALCULATED SCENARIO</div><h3>Adjusted reference values</h3><p>Arithmetic outputs from your selected assumptions</p></div></div>
+    <div className="content-grid simulator-grid"><section className="panel glass"><div className="panel-head"><div><div className="eyebrow">SCENARIO INPUTS</div><h3>Adjust environmental assumptions</h3><p>Changes are relative to the dataset's historical mean.</p></div><div className="heading-actions"><Explain label="Explain scenario inputs">Each slider sets an independent adjustment to its indicator's full-record historical mean. It does not model relationships among indicators or predict a future outcome.</Explain><button className="text-link" onClick={reset}><RefreshCw size={14}/> Reset</button></div></div>
+      <div className="slider-control"><div className="slider-label"><span><Droplets size={17}/> Rainfall change</span><b>{rainDelta>0?"+":""}{rainDelta}%</b><Explain label="Explain rainfall adjustment">Changes the historical mean rainfall by the selected percentage. The displayed value is calculated arithmetically.</Explain></div><input type="range" min="-50" max="50" step="5" value={rainDelta} onChange={e=>setRainDelta(Number(e.target.value))}/><div className="range-labels"><span>−50%</span><span>0%</span><span>+50%</span></div></div>
+      <div className="slider-control"><div className="slider-label"><span><ThermometerSun size={17}/> LST change</span><b>{tempDelta>0?"+":""}{tempDelta.toFixed(1)} °C</b><Explain label="Explain temperature adjustment">Adds the selected temperature change in degrees Celsius to the historical mean land surface temperature.</Explain></div><input type="range" min="-3" max="5" step=".5" value={tempDelta} onChange={e=>setTempDelta(Number(e.target.value))}/><div className="range-labels"><span>−3 °C</span><span>0 °C</span><span>+5 °C</span></div></div>
+      <div className="slider-control"><div className="slider-label"><span><Leaf size={17}/> NDVI adjustment</span><b>{ndviDelta>0?"+":""}{ndviDelta.toFixed(3)}</b><Explain label="Explain NDVI adjustment">Adds the selected NDVI adjustment to the historical mean. NDVI is a dimensionless index of vegetation greenness.</Explain></div><input type="range" min="-.05" max=".05" step=".005" value={ndviDelta} onChange={e=>setNdviDelta(Number(e.target.value))}/><div className="range-labels"><span>−0.05</span><span>0</span><span>+0.05</span></div></div>
+    </section><section className="panel glass"><div className="panel-head"><div><div className="eyebrow">CALCULATED SCENARIO</div><h3>Adjusted reference values</h3><p>Arithmetic outputs from your selected assumptions</p></div><Explain label="Explain calculated scenario">Reference values are means across the full loaded dataset. Adjusted rainfall is base × (1 + percent change); temperature and NDVI use addition. These are illustrative arithmetic results, not projections.</Explain></div>
       <div className="scenario-results">{[{label:"Rainfall",base:baseline.rain,result:baseline.rain*(1+rainDelta/100),unit:"mm",digits:2},{label:"Land Surface Temperature",base:baseline.lst,result:baseline.lst+tempDelta,unit:"°C",digits:2},{label:"NDVI",base:baseline.ndvi,result:baseline.ndvi+ndviDelta,unit:"",digits:4}].map(x=><div className="scenario-result" key={x.label}><span>{x.label}</span><div><small>REFERENCE {fmt(x.base,x.digits)} {x.unit}</small><b>{fmt(x.result,x.digits)} <i>{x.unit}</i></b></div></div>)}</div>
       <div className="scenario-disclaimer"><Info size={15}/> These are independent arithmetic adjustments. No causal relationship between rainfall, temperature, and NDVI is assumed.</div>
     </section></div>
-    <section className="panel glass"><div className="panel-head"><div><div className="eyebrow">STARTING POINTS</div><h3>Example scenarios</h3><p>Load a preset to explore different assumptions.</p></div></div><div className="preset-grid">{scenarios.map(s=><button className="preset" key={s.label} onClick={()=>{setRainDelta(s.rain);setTempDelta(s.temp);setNdviDelta(s.ndvi)}}><b>{s.label}</b><small>Rainfall {s.rain>0?"+":""}{s.rain}% · LST {s.temp>0?"+":""}{s.temp}°C · NDVI {s.ndvi>0?"+":""}{s.ndvi}</small><span>Load scenario <ArrowUpRight size={13}/></span></button>)}</div></section>
+    <section className="panel glass"><div className="panel-head"><div><div className="eyebrow">STARTING POINTS</div><h3>Example scenarios</h3><p>Load a preset to explore different assumptions.</p></div><Explain label="Explain example scenarios">Presets are example combinations of slider values only. They are not forecasts, recommended scenarios, or statements about future conditions.</Explain></div><div className="preset-grid">{scenarios.map(s=><button className="preset" key={s.label} onClick={()=>{setRainDelta(s.rain);setTempDelta(s.temp);setNdviDelta(s.ndvi)}}><b>{s.label}</b><small>Rainfall {s.rain>0?"+":""}{s.rain}% · LST {s.temp>0?"+":""}{s.temp}°C · NDVI {s.ndvi>0?"+":""}{s.ndvi}</small><span>Load scenario <ArrowUpRight size={13}/></span></button>)}</div></section>
   </div>;
+}
+function AboutEarthScope({ rows }) {
+  const modules = [
+    ["Overview", "Start with national monthly trends, the latest indicator readings, recent anomaly candidates, and the interactive governorate map."],
+    ["Anomaly Detective", "Screen monthly observations using an indicator, year, and Z-score threshold. Flagged values are candidates for further investigation, not confirmed events."],
+    ["Climate Fingerprint", "Compare governorate averages, variability, unusual-month percentages, monthly histories, and exploratory climate groups."],
+    ["Climate Timeline", "Follow one national indicator over time and compare observations with the month-specific baseline."],
+    ["Future Simulator", "Try arithmetic changes to historical averages. This is a scenario calculator, not a forecast."]
+  ];
+
+  return (
+    <div className="page-stack">
+      <SectionHeading
+        eyebrow="ABOUT THIS WORKSPACE"
+        title="About EarthScope"
+        subtitle="A guide to the website, its data, and how to interpret what you see."
+        explanation="EarthScope is an exploratory dashboard for examining the supplied Egypt environmental observation datasets. It helps users inspect patterns; it does not make official climate assessments or predictions."
+      />
+
+      <section className="panel glass about-intro">
+        <div className="eyebrow">WHAT EARTHSCOPE DOES</div>
+        <h3>Explore environmental observations, not just numbers.</h3>
+        <p>
+          EarthScope brings monthly rainfall, land surface temperature (LST),
+          and vegetation greenness (NDVI) together in one workspace. Use its
+          charts and regional comparisons to spot patterns, examine unusual
+          months, and understand the limits of the available data.
+        </p>
+        <div className="about-dataset-facts">
+          <div><span>National records</span><b>{rows.length.toLocaleString()} months</b></div>
+          <div><span>Coverage</span><b>{rows[0]?.date?.slice(0, 4) || "—"}–{rows.at(-1)?.date?.slice(0, 4) || "—"}</b></div>
+          <div><span>Core indicators</span><b>Rainfall · LST · NDVI</b></div>
+        </div>
+      </section>
+
+      <section className="panel glass">
+        <div className="panel-head">
+          <div><div className="eyebrow">HOW TO USE IT</div><h3>Choose a workspace</h3></div>
+          <Explain label="Explain the workspace navigation">Use the sidebar to move between the overview and focused analysis tools. Your theme preference is stored in this browser.</Explain>
+        </div>
+        <div className="about-module-list">
+          {modules.map(([title, description], index) => (
+            <div className="about-module" key={title}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <div><b>{title}</b><p>{description}</p></div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel glass">
+        <div className="panel-head">
+          <div><div className="eyebrow">DATA GUIDE</div><h3>What each indicator means</h3></div>
+          <Explain label="Explain the data guide">Indicator definitions describe the measured variable. The values and derived statistics are taken from the CSV files included with this project.</Explain>
+        </div>
+        <div className="about-indicator-grid">
+          <article><Droplets size={18}/><h4>Rainfall</h4><p>Monthly precipitation in millimeters (mm). A baseline is the typical value for that calendar month in the 2001–2020 reference period.</p></article>
+          <article><ThermometerSun size={18}/><h4>Land Surface Temperature</h4><p>The temperature of the land surface in degrees Celsius (°C); it is not the same as near-surface air temperature.</p></article>
+          <article><Leaf size={18}/><h4>Vegetation Greenness (NDVI)</h4><p>A dimensionless satellite index related to vegetation greenness. Missing NDVI observations are possible and should not be read as zero.</p></article>
+        </div>
+      </section>
+
+      <section className="panel glass">
+        <div className="panel-head">
+          <div><div className="eyebrow">DATA PROVENANCE</div><h3>Explore the source products</h3></div>
+          <Explain label="Explain data provenance">These references describe the Earth-observation products and the government-sourced administrative boundaries used by this project. The dashboard reads its included processed CSV files; it does not fetch or reprocess the satellite products.</Explain>
+        </div>
+        <div className="source-cards">
+          <a href="https://gpm.nasa.gov/data/imerg" target="_blank" rel="noreferrer">
+            <span>PRECIPITATION</span><b>NASA Global Precipitation Measurement (IMERG)</b><small>Product information <ArrowUpRight size={13}/></small>
+          </a>
+          <a href="https://lpdaac.usgs.gov/products/mod11a2v061/" target="_blank" rel="noreferrer">
+            <span>LAND SURFACE TEMPERATURE</span><b>MODIS Terra MOD11A2</b><small>Product information <ArrowUpRight size={13}/></small>
+          </a>
+          <a href="https://lpdaac.usgs.gov/products/mod13q1v061/" target="_blank" rel="noreferrer">
+            <span>VEGETATION INDEX</span><b>MODIS Terra MOD13Q1 (NDVI)</b><small>Product information <ArrowUpRight size={13}/></small>
+          </a>
+          <a href="https://data.humdata.org/dataset/cod-ab-egy" target="_blank" rel="noreferrer">
+            <span>GOVERNORATE BOUNDARIES</span><b>Egypt CAPMAS · OCHA COD-AB</b><small>Boundary data &amp; CC BY-IGO attribution <ArrowUpRight size={13}/></small>
+          </a>
+        </div>
+        <p className="source-method-note">The map uses the 27 Admin 1 governorate boundaries sourced from Egypt's CAPMAS and published by OCHA in the Common Operational Dataset (reviewed 19 Dec 2024; CC BY-IGO 3.0). Monthly baselines in the supplied observation datasets use a 2001–2020 reference period. Review the source files and processing metadata before reuse; this dashboard does not independently validate the upstream processing.</p>
+      </section>
+
+      <div className="content-grid about-grid">
+        <section className="panel glass">
+          <div className="panel-head"><div><div className="eyebrow">READING THE NUMBERS</div><h3>Baseline, anomaly, and Z-score</h3></div><Explain label="Explain statistical terms">Derived statistics summarize differences from reference conditions. Their meaning depends on the supplied data and method, and they do not establish causes.</Explain></div>
+          <dl className="about-definitions">
+            <div><dt>Baseline</dt><dd>A month-specific reference value.</dd></div>
+            <div><dt>Anomaly</dt><dd>Observed value minus baseline, in the indicator's units.</dd></div>
+            <div><dt>Z-score</dt><dd>Anomaly scaled by historical variability, expressed in standard deviations.</dd></div>
+            <div><dt>Unusual months</dt><dd>Percentage of months flagged by the regional fingerprint analysis.</dd></div>
+          </dl>
+        </section>
+        <section className="panel glass">
+          <div className="panel-head"><div><div className="eyebrow">IMPORTANT LIMITS</div><h3>Use the data thoughtfully</h3></div><Explain label="Explain data limitations">The supplied data supports exploration and screening, not causal conclusions or official projections. Always review the source files and methodology before reusing a result.</Explain></div>
+          <ul className="about-limits">
+            <li>CSV files may contain missing observations; a missing value is not zero. Regional NDVI is currently unavailable in the included governorate files, while national NDVI is present.</li>
+            <li>The map shows CAPMAS-sourced governorate polygons from OCHA COD-AB (Admin 1). It is an administrative map, not a cadastral or legal survey.</li>
+            <li>Climate groups are exploratory clusters, not official Egyptian climate zones.</li>
+            <li>The simulator uses arithmetic adjustments and is not a climate forecast.</li>
+            <li>Anomalies and correlations do not prove a cause or establish statistical significance.</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  );
 }
 function DataError({error,onRetry}) {
   return <div className="error-screen"><div className="error-icon"><Database size={26}/></div><div className="eyebrow">DATA CONNECTION REQUIRED</div><h2>EARTHSCOPE needs its master dataset.</h2><p>{error}</p><div className="setup-card"><b>How to connect your CSV</b><ol><li>Open the EARTHSCOPE project folder.</li><li>Open <code>public/data/</code>.</li><li>Place <code>earthscope_master_dataset_2001_2024.csv</code> inside that folder.</li><li>Restart the development server or select Retry.</li></ol></div><button className="primary-btn" onClick={onRetry}><RefreshCw size={16}/> Retry loading dataset</button></div>;
@@ -839,7 +974,8 @@ export default function App() {
     if(page==="anomalies")return <AnomalyDetective rows={rows}/>;
     if(page==="fingerprint")return <ClimateFingerprint/>;
     if(page==="timeline")return <ClimateTimeline rows={rows}/>;
-    return <FutureSimulator rows={rows}/>;
+    if(page==="simulator")return <FutureSimulator rows={rows}/>;
+    return <AboutEarthScope rows={rows}/>;
   },[page,rows]);
   if(status==="error")return <DataError error={error} onRetry={fetchData}/>;
   return <div className="app-shell"><Sidebar page={page} setPage={setPage} open={menuOpen} setOpen={setMenuOpen}/>{menuOpen&&<button className="mobile-overlay" onClick={()=>setMenuOpen(false)} aria-label="Close navigation"/>}
