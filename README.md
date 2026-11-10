@@ -62,3 +62,13 @@ npm run preview
 ```
 
 If the master CSV cannot load, verify its exact filename and location at `public/data/earthscope_master_dataset_2001_2024.csv`.
+
+## Deploy to Vercel
+
+1. Import [yusof-hub/eaarthscope on Vercel](https://vercel.com/new/import?s=https%3A%2F%2Fgithub.com%2Fyusof-hub%2Feaarthscope) and authorize GitHub access if prompted.
+2. Keep the project root as the root directory and use the Vite defaults:
+   - Framework preset: **Vite**
+   - Build command: `npm run build`
+   - Output directory: `dist`
+   - Install command: `npm install`
+3. No environment variables are required. Deploy the `main` branch; later pushes to `main` trigger production deployments automatically.
