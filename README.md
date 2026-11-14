@@ -63,8 +63,7 @@ npm run preview
 
 If the master CSV cannot load, verify its exact filename and location at `public/data/earthscope_master_dataset_2001_2024.csv`.
 
-**Vercel deployment:
-**
+## Vercel deployment:
 https://earthscopenasa.vercel.app 
    - Framework preset: **Vite**
    - Build command: `npm run build`
